@@ -30,6 +30,9 @@ typedef struct {
     bookmark_doc_t docs[STATE_MAX_DOCS];
 } bookmark_db_t;
 
+static pos_db_t g_pos_db;
+static bookmark_db_t g_bookmark_db;
+
 static void copy_name(char *dst, const char *src)
 {
     uint8_t i = 0u;
@@ -236,57 +239,54 @@ static int find_empty_bookmark_doc(const bookmark_db_t *db)
 
 bool state_load_last_position(const char *doc_name, size_t *out_offset)
 {
-    pos_db_t db;
     int slot;
 
     if (doc_name == NULL || out_offset == NULL) {
         return false;
     }
 
-    if (!load_pos_db(&db)) {
+    if (!load_pos_db(&g_pos_db)) {
         return false;
     }
 
-    slot = find_pos_slot(&db, doc_name);
+    slot = find_pos_slot(&g_pos_db, doc_name);
     if (slot < 0) {
         return false;
     }
 
-    *out_offset = db.entries[slot].offset;
+    *out_offset = g_pos_db.entries[slot].offset;
     return true;
 }
 
 bool state_save_last_position(const char *doc_name, size_t offset)
 {
-    pos_db_t db;
     int slot;
 
     if (doc_name == NULL || doc_name[0] == '\0') {
         return false;
     }
 
-    if (!load_pos_db(&db)) {
+    if (!load_pos_db(&g_pos_db)) {
         return false;
     }
 
-    slot = find_pos_slot(&db, doc_name);
+    slot = find_pos_slot(&g_pos_db, doc_name);
     if (slot < 0) {
-        slot = find_empty_pos_slot(&db);
+        slot = find_empty_pos_slot(&g_pos_db);
     }
     if (slot < 0) {
         slot = 0;
     }
 
-    db.entries[slot].used = 1u;
-    copy_name(db.entries[slot].name, doc_name);
-    db.entries[slot].offset = (uint32_t)offset;
+    g_pos_db.entries[slot].used = 1u;
+    copy_name(g_pos_db.entries[slot].name, doc_name);
+    g_pos_db.entries[slot].offset = (uint32_t)offset;
 
-    return save_pos_db(&db);
+    return save_pos_db(&g_pos_db);
 }
 
 uint8_t state_get_bookmarks(const char *doc_name, size_t *out_offsets, uint8_t max_out)
 {
-    bookmark_db_t db;
     int slot;
     uint8_t i;
     uint8_t count;
@@ -295,16 +295,16 @@ uint8_t state_get_bookmarks(const char *doc_name, size_t *out_offsets, uint8_t m
         return 0u;
     }
 
-    if (!load_bookmark_db(&db)) {
+    if (!load_bookmark_db(&g_bookmark_db)) {
         return 0u;
     }
 
-    slot = find_bookmark_doc(&db, doc_name);
+    slot = find_bookmark_doc(&g_bookmark_db, doc_name);
     if (slot < 0) {
         return 0u;
     }
 
-    count = db.docs[slot].count;
+    count = g_bookmark_db.docs[slot].count;
     if (count > STATE_MAX_BOOKMARKS_PER_DOC) {
         count = STATE_MAX_BOOKMARKS_PER_DOC;
     }
@@ -313,7 +313,7 @@ uint8_t state_get_bookmarks(const char *doc_name, size_t *out_offsets, uint8_t m
     }
 
     for (i = 0u; i < count; i++) {
-        out_offsets[i] = db.docs[slot].offsets[i];
+        out_offsets[i] = g_bookmark_db.docs[slot].offsets[i];
     }
 
     return count;
@@ -321,7 +321,6 @@ uint8_t state_get_bookmarks(const char *doc_name, size_t *out_offsets, uint8_t m
 
 bool state_toggle_bookmark(const char *doc_name, size_t offset, bool *out_added)
 {
-    bookmark_db_t db;
     int slot;
     uint8_t i;
 
@@ -333,47 +332,47 @@ bool state_toggle_bookmark(const char *doc_name, size_t offset, bool *out_added)
         return false;
     }
 
-    if (!load_bookmark_db(&db)) {
+    if (!load_bookmark_db(&g_bookmark_db)) {
         return false;
     }
 
-    slot = find_bookmark_doc(&db, doc_name);
+    slot = find_bookmark_doc(&g_bookmark_db, doc_name);
     if (slot < 0) {
-        slot = find_empty_bookmark_doc(&db);
+        slot = find_empty_bookmark_doc(&g_bookmark_db);
         if (slot < 0) {
             slot = 0;
         }
-        memset(&db.docs[slot], 0, sizeof(db.docs[slot]));
-        db.docs[slot].used = 1u;
-        copy_name(db.docs[slot].name, doc_name);
+        memset(&g_bookmark_db.docs[slot], 0, sizeof(g_bookmark_db.docs[slot]));
+        g_bookmark_db.docs[slot].used = 1u;
+        copy_name(g_bookmark_db.docs[slot].name, doc_name);
     }
 
-    for (i = 0u; i < db.docs[slot].count && i < STATE_MAX_BOOKMARKS_PER_DOC; i++) {
-        if (db.docs[slot].offsets[i] == (uint32_t)offset) {
+    for (i = 0u; i < g_bookmark_db.docs[slot].count && i < STATE_MAX_BOOKMARKS_PER_DOC; i++) {
+        if (g_bookmark_db.docs[slot].offsets[i] == (uint32_t)offset) {
             uint8_t j;
-            for (j = i + 1u; j < db.docs[slot].count; j++) {
-                db.docs[slot].offsets[j - 1u] = db.docs[slot].offsets[j];
+            for (j = i + 1u; j < g_bookmark_db.docs[slot].count; j++) {
+                g_bookmark_db.docs[slot].offsets[j - 1u] = g_bookmark_db.docs[slot].offsets[j];
             }
-            if (db.docs[slot].count > 0u) {
-                db.docs[slot].count--;
+            if (g_bookmark_db.docs[slot].count > 0u) {
+                g_bookmark_db.docs[slot].count--;
             }
-            return save_bookmark_db(&db);
+            return save_bookmark_db(&g_bookmark_db);
         }
     }
 
-    if (db.docs[slot].count < STATE_MAX_BOOKMARKS_PER_DOC) {
-        db.docs[slot].offsets[db.docs[slot].count] = (uint32_t)offset;
-        db.docs[slot].count++;
+    if (g_bookmark_db.docs[slot].count < STATE_MAX_BOOKMARKS_PER_DOC) {
+        g_bookmark_db.docs[slot].offsets[g_bookmark_db.docs[slot].count] = (uint32_t)offset;
+        g_bookmark_db.docs[slot].count++;
     } else {
-        memmove(db.docs[slot].offsets,
-            db.docs[slot].offsets + 1u,
-            (STATE_MAX_BOOKMARKS_PER_DOC - 1u) * sizeof(db.docs[slot].offsets[0]));
-        db.docs[slot].offsets[STATE_MAX_BOOKMARKS_PER_DOC - 1u] = (uint32_t)offset;
+        memmove(g_bookmark_db.docs[slot].offsets,
+            g_bookmark_db.docs[slot].offsets + 1u,
+            (STATE_MAX_BOOKMARKS_PER_DOC - 1u) * sizeof(g_bookmark_db.docs[slot].offsets[0]));
+        g_bookmark_db.docs[slot].offsets[STATE_MAX_BOOKMARKS_PER_DOC - 1u] = (uint32_t)offset;
     }
 
     if (out_added != NULL) {
         *out_added = true;
     }
 
-    return save_bookmark_db(&db);
+    return save_bookmark_db(&g_bookmark_db);
 }

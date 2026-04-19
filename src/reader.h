@@ -15,6 +15,7 @@
 typedef struct {
     uint8_t bytes[READER_MAX_LINE_BYTES];
     uint8_t len;
+    size_t start_offset;
 } reader_line_t;
 
 typedef struct {
@@ -44,6 +45,7 @@ bool reader_has_next_page(const reader_t *reader);
 size_t reader_text_length(const reader_t *reader);
 size_t reader_current_start(const reader_t *reader);
 size_t reader_current_end(const reader_t *reader);
+size_t reader_page_number_for_offset(const article_stream_t *stream, uint8_t cols, uint8_t lines, size_t offset);
 bool reader_jump_to_offset(reader_t *reader, size_t offset, bool reset_history);
 
 #endif

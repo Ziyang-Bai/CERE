@@ -20,6 +20,12 @@ static const uint8_t *g_entries = NULL;
 static uint32_t g_entry_count = 0u;
 static uint8_t g_font_handle = 0u;
 
+static uint8_t *g_fallback_blob = NULL;
+static size_t g_fallback_blob_size = 0u;
+static const uint8_t *g_fallback_entries = NULL;
+static uint32_t g_fallback_entry_count = 0u;
+static uint8_t g_fallback_handle = 0u;
+
 static uint32_t read_u32_le(const uint8_t *p)
 {
     return ((uint32_t)p[0])
@@ -52,6 +58,30 @@ static const uint8_t *glyph_find_bitmap(uint32_t codepoint)
     while (low < high) {
         uint32_t mid = low + (high - low) / 2u;
         const uint8_t *entry = g_entries + (size_t)mid * GLYPH_ENTRY_SIZE;
+        uint32_t cp = read_u32_le(entry);
+
+        if (cp == codepoint) {
+            return entry + 4u;
+        }
+
+        if (cp < codepoint) {
+            low = mid + 1u;
+        } else {
+            high = mid;
+        }
+    }
+
+    return NULL;
+}
+
+static const uint8_t *glyph_find_bitmap_in(const uint8_t *entries, uint32_t entry_count, uint32_t codepoint)
+{
+    uint32_t low = 0u;
+    uint32_t high = entry_count;
+
+    while (low < high) {
+        uint32_t mid = low + (high - low) / 2u;
+        const uint8_t *entry = entries + (size_t)mid * GLYPH_ENTRY_SIZE;
         uint32_t cp = read_u32_le(entry);
 
         if (cp == codepoint) {
@@ -101,6 +131,11 @@ bool glyph_load_appvar(const char *name)
     size_t required_size;
     const char *var_name;
     const uint8_t *blob;
+    uint8_t fallback_handle;
+    size_t fallback_blob_size;
+    uint32_t fallback_entry_count;
+    size_t fallback_required_size;
+    const uint8_t *fallback_blob;
 
     glyph_unload();
 
@@ -140,6 +175,32 @@ bool glyph_load_appvar(const char *name)
     g_entry_count = entry_count;
     g_font_handle = handle;
 
+    if (strcmp(var_name, GLYPH_APPVAR_NAME) != 0) {
+        fallback_handle = ti_OpenVar(GLYPH_APPVAR_NAME, "r", OS_TYPE_APPVAR);
+        if (fallback_handle != 0u) {
+            fallback_blob_size = ti_GetSize(fallback_handle);
+            fallback_blob = (const uint8_t *)ti_GetDataPtr(fallback_handle);
+
+            if (fallback_blob != NULL && fallback_blob_size >= GLYPH_HEADER_SIZE
+                && memcmp(fallback_blob, GLYPH_MAGIC, 4u) == 0
+                && fallback_blob[4] == GLYPH_VERSION) {
+                fallback_entry_count = read_u32_le(fallback_blob + 8u);
+                fallback_required_size = GLYPH_HEADER_SIZE + (size_t)fallback_entry_count * GLYPH_ENTRY_SIZE;
+                if (fallback_required_size <= fallback_blob_size) {
+                    g_fallback_blob = (uint8_t *)fallback_blob;
+                    g_fallback_blob_size = fallback_blob_size;
+                    g_fallback_entries = fallback_blob + GLYPH_HEADER_SIZE;
+                    g_fallback_entry_count = fallback_entry_count;
+                    g_fallback_handle = fallback_handle;
+                } else {
+                    ti_Close(fallback_handle);
+                }
+            } else {
+                ti_Close(fallback_handle);
+            }
+        }
+    }
+
     return true;
 }
 
@@ -152,9 +213,19 @@ void glyph_unload(void)
         ti_Close(g_font_handle);
         g_font_handle = 0u;
     }
+    if (g_fallback_blob != NULL) {
+        g_fallback_blob = NULL;
+    }
+    if (g_fallback_handle != 0u) {
+        ti_Close(g_fallback_handle);
+        g_fallback_handle = 0u;
+    }
     g_font_blob_size = 0u;
     g_entries = NULL;
     g_entry_count = 0u;
+    g_fallback_blob_size = 0u;
+    g_fallback_entries = NULL;
+    g_fallback_entry_count = 0u;
 }
 
 bool glyph_is_loaded(void)
@@ -171,6 +242,9 @@ bool glyph_draw_cjk(uint32_t codepoint, uint16_t x, uint8_t y)
     }
 
     bitmap = glyph_find_bitmap(codepoint);
+    if (bitmap == NULL && g_fallback_entries != NULL && g_fallback_entry_count > 0u) {
+        bitmap = glyph_find_bitmap_in(g_fallback_entries, g_fallback_entry_count, codepoint);
+    }
     if (bitmap == NULL) {
         return false;
     }

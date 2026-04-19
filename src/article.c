@@ -8,6 +8,8 @@
 
 #include <fileioc.h>
 
+#include "text_resources.h"
+
 static uint32_t read_u32_le(const uint8_t *p)
 {
     return ((uint32_t)p[0])
@@ -367,24 +369,24 @@ const char *article_open_error_text(article_open_error_t error)
 {
     switch (error) {
     case ARTICLE_OPEN_OK:
-        return "正常";
+        return RES_TXT_ARTICLE_OPEN_OK;
     case ARTICLE_OPEN_INVALID_ARG:
-        return "参数无效";
+        return RES_TXT_ARTICLE_INVALID_ARG;
     case ARTICLE_OPEN_NOT_FOUND:
-        return "未找到 AppVar";
+        return RES_TXT_ARTICLE_NOT_FOUND;
     case ARTICLE_OPEN_TOO_SMALL:
-        return "文件过小";
+        return RES_TXT_ARTICLE_TOO_SMALL;
     case ARTICLE_OPEN_READ_FAIL:
-        return "读取失败";
+        return RES_TXT_ARTICLE_READ_FAIL;
     case ARTICLE_OPEN_BAD_MAGIC:
-        return "CART 标识错误";
+        return RES_TXT_ARTICLE_BAD_MAGIC;
     case ARTICLE_OPEN_BAD_VERSION:
-        return "不支持的版本";
+        return RES_TXT_ARTICLE_BAD_VERSION;
     case ARTICLE_OPEN_BAD_HEADER:
-        return "头部无效";
+        return RES_TXT_ARTICLE_BAD_HEADER;
     case ARTICLE_OPEN_BAD_LENGTH:
-        return "长度无效";
+        return RES_TXT_ARTICLE_BAD_LENGTH;
     default:
-        return "未知错误";
+        return RES_TXT_ARTICLE_UNKNOWN_ERROR;
     }
 }

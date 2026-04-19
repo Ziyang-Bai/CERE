@@ -18,6 +18,7 @@
 #include "reader.h"
 #include "renderer.h"
 #include "state.h"
+#include "text_resources.h"
 
 typedef enum {
     APP_STATE_MENU = 0,
@@ -28,7 +29,7 @@ typedef enum {
 
 #define QUICK_HOME_WINDOW_FRAMES 300u
 #define STARTUP_IGNORE_FRAMES 30u
-#define PANEL_VISIBLE_ITEMS 10u
+#define PANEL_VISIBLE_ITEMS 11u
 #define PANEL_ITEM_MAX_BYTES 64u
 
 /* Keep large runtime buffers out of CE stack to avoid startup overflow. */
@@ -122,7 +123,7 @@ static void set_status_open_error(char *status, size_t status_size,
     }
 
     if (doc_name == NULL || doc_name[0] == '\0') {
-        append_text(status, status_size, 0u, "打开失败: ");
+        append_text(status, status_size, 0u, RES_TXT_OPEN_FAIL_PREFIX);
         append_text(status, status_size, strlen(status), article_open_error_text(error));
         return;
     }
@@ -143,7 +144,7 @@ static bool open_selected_document(const article_catalog_t *catalog, uint8_t sel
     }
 
     if (selected == 0u || catalog->count == 0u || selected - 1u >= catalog->count) {
-        set_status(status, status_size, "没有可打开的文档");
+        set_status(status, status_size, RES_TXT_STATUS_NO_DOC_OPEN);
         return false;
     }
 
@@ -154,7 +155,7 @@ static bool open_selected_document(const article_catalog_t *catalog, uint8_t sel
 
     if (!glyph_load_appvar(article_font_name(stream))) {
         append_text(status, status_size, 0u, article_name(stream));
-        append_text(status, status_size, strlen(status), ": 缺少字形 ");
+        append_text(status, status_size, strlen(status), RES_TXT_ERR_MISSING_GLYPH_SUFFIX);
         append_text(status, status_size, strlen(status), article_font_name(stream));
         article_close(stream);
         return false;
@@ -164,7 +165,7 @@ static bool open_selected_document(const article_catalog_t *catalog, uint8_t sel
         glyph_unload();
         article_close(stream);
         append_text(status, status_size, 0u, catalog->names[selected - 1u]);
-        append_text(status, status_size, strlen(status), ": 阅读器初始化失败");
+        append_text(status, status_size, strlen(status), RES_TXT_ERR_READER_INIT_SUFFIX);
         return false;
     }
 
@@ -187,6 +188,15 @@ static void restore_reader_position(reader_t *reader, size_t target_offset)
         }
         page = reader_get_page(reader);
     }
+}
+
+static uint16_t page_number_for_offset(const article_stream_t *stream, const reader_t *reader, size_t offset)
+{
+    if (stream == NULL || reader == NULL) {
+        return 0u;
+    }
+
+    return (uint16_t)reader_page_number_for_offset(stream, reader->cols, reader->lines, offset);
 }
 
 static uint8_t build_bookmark_panel(const article_stream_t *stream, const reader_t *reader,
@@ -213,7 +223,7 @@ static uint8_t build_bookmark_panel(const article_stream_t *stream, const reader
     *out_total = count;
     if (count == 0u) {
         *out_window_start = 0u;
-        set_status(status, status_size, "当前文档没有书签");
+        set_status(status, status_size, RES_TXT_STATUS_NO_BOOKMARKS);
         return 0u;
     }
 
@@ -233,6 +243,7 @@ static uint8_t build_bookmark_panel(const article_stream_t *stream, const reader
     for (i = 0u; i < PANEL_VISIBLE_ITEMS; i++) {
         uint16_t idx = (uint16_t)(start + i);
         uint8_t percent = 0u;
+        uint16_t page_number = 0u;
         int written;
 
         if (idx >= count) {
@@ -244,10 +255,15 @@ static uint8_t build_bookmark_panel(const article_stream_t *stream, const reader
             percent = (uint8_t)((visible_offsets[i] * 100u) / total_bytes);
         }
 
-        written = (int)append_text((char *)labels[i], PANEL_ITEM_MAX_BYTES, 0u, "书签");
+        page_number = page_number_for_offset(stream, reader, visible_offsets[i]);
+
+        written = (int)append_text((char *)labels[i], PANEL_ITEM_MAX_BYTES, 0u, RES_TXT_LABEL_BOOKMARK);
         written = (int)append_uint((char *)labels[i], PANEL_ITEM_MAX_BYTES, (size_t)written,
             (unsigned int)(idx + 1u));
-        written = (int)append_text((char *)labels[i], PANEL_ITEM_MAX_BYTES, (size_t)written, " 进度");
+        written = (int)append_text((char *)labels[i], PANEL_ITEM_MAX_BYTES, (size_t)written, RES_TXT_LABEL_PAGE);
+        written = (int)append_uint((char *)labels[i], PANEL_ITEM_MAX_BYTES, (size_t)written,
+            (unsigned int)page_number);
+        written = (int)append_text((char *)labels[i], PANEL_ITEM_MAX_BYTES, (size_t)written, RES_TXT_LABEL_PROGRESS);
         written = (int)append_uint((char *)labels[i], PANEL_ITEM_MAX_BYTES, (size_t)written,
             (unsigned int)percent);
         written = (int)append_text((char *)labels[i], PANEL_ITEM_MAX_BYTES, (size_t)written, "%");
@@ -257,7 +273,7 @@ static uint8_t build_bookmark_panel(const article_stream_t *stream, const reader
         visible_count++;
     }
 
-    set_status(status, status_size, "2nd/Enter跳转  左右切换  Clear返回");
+    set_status(status, status_size, RES_TXT_PANEL_FOOTER_DEFAULT);
     return visible_count;
 }
 
@@ -281,7 +297,7 @@ static uint8_t build_toc_panel(const article_stream_t *stream,
     *out_total = toc_total;
     if (toc_total == 0u) {
         *out_window_start = 0u;
-        set_status(status, status_size, "当前文档没有章节");
+        set_status(status, status_size, RES_TXT_STATUS_NO_CHAPTERS);
         return 0u;
     }
 
@@ -310,7 +326,7 @@ static uint8_t build_toc_panel(const article_stream_t *stream,
         visible_offsets[i] = entry.text_offset;
         title_len = entry.title_len;
         if (title_len == 0u) {
-            static const uint8_t untitled[] = "(untitled)";
+            static const uint8_t untitled[] = RES_TXT_UNTITLED;
             title_len = (uint8_t)(sizeof(untitled) - 1u);
             memcpy(labels[i], untitled, title_len);
         } else {
@@ -326,7 +342,7 @@ static uint8_t build_toc_panel(const article_stream_t *stream,
         visible_count++;
     }
 
-    set_status(status, status_size, "2nd/Enter跳转  左右切换  Clear返回");
+    set_status(status, status_size, RES_TXT_PANEL_FOOTER_DEFAULT);
 
     return visible_count;
 }
@@ -353,10 +369,10 @@ static void close_reader_to_menu(app_state_t *state, bool *doc_open,
     if (catalog != NULL && selected != NULL) {
         if (catalog->count == 0u) {
             *selected = 0u;
-            set_status(menu_status, status_size, "未找到 CART 文档");
+            set_status(menu_status, status_size, RES_TXT_STATUS_NO_CART_DOC);
         } else if (*selected > catalog->count) {
             *selected = catalog->count;
-            set_status(menu_status, status_size, "已返回主菜单");
+            set_status(menu_status, status_size, RES_TXT_STATUS_BACK_TO_MENU);
         }
     }
 }
@@ -392,9 +408,9 @@ int main(void)
 
     article_scan_documents(&catalog);
     if (catalog.count == 0u) {
-        set_status(status, sizeof(status), "未找到 CART 文档");
+        set_status(status, sizeof(status), RES_TXT_STATUS_NO_CART_DOC);
     } else {
-        set_status(status, sizeof(status), "请选择 关于 或文档");
+        set_status(status, sizeof(status), RES_TXT_STATUS_SELECT_ABOUT_OR_DOC);
     }
 
     while (running) {
@@ -427,13 +443,13 @@ int main(void)
                 article_scan_documents(&catalog);
                 if (catalog.count == 0u) {
                     selected = 0u;
-                    set_status(status, sizeof(status), "未找到 CART 文档");
+                    set_status(status, sizeof(status), RES_TXT_STATUS_NO_CART_DOC);
                 } else {
                     total_items = (uint8_t)(1u + catalog.count);
                     if (selected >= total_items) {
                         selected = (uint8_t)(total_items - 1u);
                     }
-                    set_status(status, sizeof(status), "已刷新文档列表");
+                    set_status(status, sizeof(status), RES_TXT_STATUS_DOC_LIST_REFRESHED);
                 }
                 dirty = true;
             }
@@ -452,7 +468,7 @@ int main(void)
                     if (state_load_last_position(article_name(&stream), &saved_offset)
                         && saved_offset < reader_text_length(&reader)) {
                         restore_reader_position(&reader, saved_offset);
-                        append_text(reader_status, sizeof(reader_status), 0u, "已恢复到 ");
+                        append_text(reader_status, sizeof(reader_status), 0u, RES_TXT_STATUS_RESTORED_TO);
                         append_uint(reader_status, sizeof(reader_status), strlen(reader_status),
                             (unsigned int)((saved_offset * 100u)
                                 / (reader_text_length(&reader) == 0u ? 1u : reader_text_length(&reader))));
@@ -497,9 +513,9 @@ int main(void)
                 bool added = false;
                 if (state_toggle_bookmark(article_name(&stream), reader_current_start(&reader), &added)) {
                     set_status(reader_status, sizeof(reader_status),
-                        added ? "已添加书签" : "已取消书签");
+                        added ? RES_TXT_STATUS_BOOKMARK_ADDED : RES_TXT_STATUS_BOOKMARK_REMOVED);
                 } else {
-                    set_status(reader_status, sizeof(reader_status), "书签保存失败");
+                    set_status(reader_status, sizeof(reader_status), RES_TXT_STATUS_BOOKMARK_SAVE_FAIL);
                 }
                 dirty = true;
             }
@@ -509,10 +525,10 @@ int main(void)
                     quick_home_taps++;
                     if (quick_home_taps >= 2u) {
                         (void)reader_jump_to_offset(&reader, 0u, true);
-                        set_status(reader_status, sizeof(reader_status), "已跳转到第一页");
+                        set_status(reader_status, sizeof(reader_status), RES_TXT_STATUS_JUMPED_FIRST_PAGE);
                         quick_home_taps = 0u;
                     } else {
-                        set_status(reader_status, sizeof(reader_status), "打开后5秒内再按2nd/Enter回第一页");
+                        set_status(reader_status, sizeof(reader_status), RES_TXT_STATUS_HINT_DOUBLE_TAP_HOME);
                     }
                     dirty = true;
                     continue;
@@ -573,7 +589,7 @@ int main(void)
                 if (panel_toc_tab) {
                     article_toc_entry_t entry;
                     if (!article_read_toc_entry(&stream, panel_selected, &entry)) {
-                        set_status(panel_status, sizeof(panel_status), "章节读取失败");
+                        set_status(panel_status, sizeof(panel_status), RES_TXT_STATUS_TOC_READ_FAIL);
                         dirty = true;
                         continue;
                     }
@@ -581,18 +597,18 @@ int main(void)
                 } else if (panel_selected < STATE_MAX_BOOKMARKS_PER_DOC) {
                     jump_offset = panel_bookmark_offsets[panel_selected];
                 } else {
-                    set_status(panel_status, sizeof(panel_status), "书签索引无效");
+                    set_status(panel_status, sizeof(panel_status), RES_TXT_STATUS_BOOKMARK_INDEX_INVALID);
                     dirty = true;
                     continue;
                 }
 
                 if (reader_jump_to_offset(&reader, jump_offset, false)) {
-                    set_status(reader_status, sizeof(reader_status), "已跳转到选中位置");
+                    set_status(reader_status, sizeof(reader_status), RES_TXT_STATUS_JUMPED_SELECTED);
                     state = APP_STATE_READER;
                     dirty = true;
                     continue;
                 }
-                set_status(panel_status, sizeof(panel_status), "跳转失败");
+                set_status(panel_status, sizeof(panel_status), RES_TXT_STATUS_JUMP_FAIL);
                 dirty = true;
             }
 
@@ -619,7 +635,7 @@ int main(void)
                     panel_selected = (uint16_t)(panel_total - 1u);
                 }
 
-                renderer_draw_panel("跳转", panel_toc_tab ? "章节" : "书签",
+                renderer_draw_panel(RES_TXT_PANEL_TITLE, panel_toc_tab ? RES_TXT_TAB_TOC : RES_TXT_TAB_BOOKMARK,
                     panel_ptrs, panel_lens,
                     panel_visible_count, panel_total, panel_window_start,
                     panel_selected, panel_status);

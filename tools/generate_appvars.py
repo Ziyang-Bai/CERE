@@ -36,6 +36,11 @@ FONT_SUFFIXES = {".ttf", ".ttc", ".otf", ".fon"}
 DEFAULT_ARTICLE_FONT_APPVAR = "CARTFNT"
 DEFAULT_BASE_FONT_APPVAR = "CEREFNT"
 DEFAULT_FONT = "simsun.ttc"
+BASE_FONT_FALLBACK_TEXT = (
+    "CERE 文档 关于 功能与键位 主菜单 阅读 面板 返回 安装 就绪"
+    " 上 下 左 右 切 换 页 码 书 签 章 节 跳 转 预 览"
+    " 左右切换 上下选择 2nd Enter Clear Alpha STAT VARS"
+)
 
 
 def resolve_default_convbin() -> str:
@@ -150,11 +155,17 @@ def parse_text_and_toc(text: str) -> tuple[str, list[tuple[int, str]]]:
     byte_offset = 0
     last = 0
 
+    def append_text_bytes(value: str) -> None:
+        nonlocal byte_offset
+        if not value:
+            return
+        chunks.append(value)
+        byte_offset += len(value.encode("utf-8"))
+
     for match in pattern.finditer(text):
         segment = text[last: match.start()]
         if segment:
-            chunks.append(segment)
-            byte_offset += len(segment.encode("utf-8"))
+            append_text_bytes(segment)
 
         title_match = match.group(1)
         if title_match is None:
@@ -162,12 +173,17 @@ def parse_text_and_toc(text: str) -> tuple[str, list[tuple[int, str]]]:
         else:
             stripped = title_match.strip()
             title = stripped if stripped else UNTITLED_CHAPTER
+        if not chunks or not chunks[-1].endswith("\n"):
+            append_text_bytes("\n")
+
         toc.append((byte_offset, title))
+        append_text_bytes(title)
+        append_text_bytes("\n")
         last = match.end()
 
     tail = text[last:]
     if tail:
-        chunks.append(tail)
+        append_text_bytes(tail)
 
     return "".join(chunks), toc
 
@@ -432,6 +448,7 @@ def generate_base_font(
     if logger is not None:
         logger("收集基础字形，请等一下。")
     base_glyph_set = extract_non_ascii_from_c_sources(src_dir)
+    base_glyph_set = sorted(set(base_glyph_set).union(text_to_glyph_set(BASE_FONT_FALLBACK_TEXT)))
 
     if logger is not None:
         logger("栅格化基础字形，请等一下。")
@@ -484,7 +501,11 @@ def generate_assets(
 
     if logger is not None:
         logger("收集文章字形，请等一下。")
-    article_glyph_set = text_to_glyph_set(text)
+    article_glyph_set = set(text_to_glyph_set(raw_text))
+    article_glyph_set.update(text_to_glyph_set(text))
+    toc_title_text = "".join(title for _, title in toc_entries)
+    article_glyph_set.update(text_to_glyph_set(toc_title_text))
+    article_glyph_set = sorted(article_glyph_set)
 
     if logger is not None:
         logger("栅格化文章字形，请等一下。")
