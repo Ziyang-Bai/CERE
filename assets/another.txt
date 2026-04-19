@@ -1,0 +1,21 @@
+C:\Users\baizi\Desktop\CED\template\*, 是否确认(Y/N)? y
+
+C:\Users\baizi\Desktop\CED>git clone https://github.com/CE-Programming/template.git .
+Cloning into '.'...
+remote: Enumerating objects: 17, done.
+remote: Counting objects: 100% (17/17), done.
+remote: Compressing objects: 100% (13/13), done.
+remote: Total 17 (delta 4), reused 13 (delta 3), pack-reused 0 (from 0)
+Receiving objects: 100% (17/17), done.
+Resolving deltas: 100% (4/4), done.
+
+C:\Users\baizi\Desktop\CED>make
+[compiling] src\main.c
+[lto opt] obj\lto.bc
+[convimg] icon.png
+[linking] bin\HelloWorld.bin
+[error] Output variable name too long (limited to 8 characters).
+make: *** [bin/HelloWorld.8xp] Error 1
+
+C:\Users\baizi\Desktop\CED>make
+[compiling] src\main.c

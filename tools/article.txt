@@ -1,0 +1,22 @@
+中文阅读器
+第1页 第01行 这是一段示例文章。
+第1页 第02行 文章会自动提取所需汉字。
+第1页 第03行 程序本体不再内置正文和字库。
+第1页 第04行 请先生成 AppVar 再发送到计算器。
+第1页 第05行 翻页按键支持左右和上下。
+第2页 第01行 你可以替换成任何 UTF-8 文本。
+第2页 第02行 只要字库覆盖，显示就会正常。
+第2页 第03行 Clear 键退出。
+Starting generation...
+Reading article text...
+Collecting required glyphs...
+Rasterizing glyphs...
+Running convbin for article AppVar...
+Running convbin for font AppVar...
+Generated article AppVar: out\CEREART.8xv
+Generated font AppVar: out\CEREFNT.8xv
+Article UTF-8 bytes: 445
+Embedded chapter entries: 0
+Unique CJK/non-ASCII glyphs: 71
+Font payload bytes: 2568
+

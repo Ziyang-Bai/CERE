@@ -1,0 +1,12 @@
+obj/
+bin/
+out/
+tools/out/
+tools/__pycache__/*
+*.pyc
+src/gfx/*.c
+src/gfx/*.h
+src/*.ll
+.DS_Store
+convimg.yaml.lst
+/.vscode/*
