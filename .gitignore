@@ -10,3 +10,4 @@ src/*.ll
 .DS_Store
 convimg.yaml.lst
 /.vscode/*
+tools/build/

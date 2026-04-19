@@ -5,8 +5,8 @@
 NAME = CERE
 ICON = icon.png
 DESCRIPTION = "CERE Chinese reader"
-COMPRESSED = NO
-ARCHIVED = NO
+COMPRESSED = YES
+ARCHIVED = YES
 
 CFLAGS = -Wall -Wextra -Oz
 CXXFLAGS = -Wall -Wextra -Oz

@@ -38,6 +38,35 @@ DEFAULT_BASE_FONT_APPVAR = "CEREFNT"
 DEFAULT_FONT = "simsun.ttc"
 
 
+def resolve_default_convbin() -> str:
+    # Prefer the bundled convbin first, then fall back to the CEdev install.
+    candidate_dirs = []
+
+    try:
+        candidate_dirs.append(Path(__file__).resolve().parent)
+    except Exception:
+        pass
+
+    if getattr(sys, "frozen", False):
+        candidate_dirs.append(Path(sys.executable).resolve().parent)
+
+    candidate_dirs.append(Path.cwd())
+
+    for base_dir in candidate_dirs:
+        bundled = base_dir / "convbin.exe"
+        if bundled.exists():
+            return str(bundled)
+
+    cedev_convbin = Path(DEFAULT_CONVBIN)
+    if cedev_convbin.exists():
+        return str(cedev_convbin)
+
+    return DEFAULT_CONVBIN
+
+
+DEFAULT_CONVBIN = resolve_default_convbin()
+
+
 @dataclass(frozen=True)
 class FontEntry:
     display_name: str
@@ -275,9 +304,13 @@ def get_font_display_name(font_path: Path) -> str:
             if names_table is None:
                 return font_path.stem
 
+            name_records = getattr(names_table, "names", None)
+            if not name_records:
+                return font_path.stem
+
             best_zh = ""
             best_any = ""
-            for record in names_table.names:
+            for record in name_records:
                 if record.nameID not in (1, 4, 16):
                     continue
                 value = decode_name_record(record.string, record.platformID)
